@@ -4,11 +4,11 @@ Multipart
 This module is meant to be a simple, extensible, multipart payload encoder and decoder that complies with the official
 grammar specification located here:
 
-http://tools.ietf.org/html/rfc2045
-http://tools.ietf.org/html/rfc2046
-http://tools.ietf.org/html/rfc2047
-http://tools.ietf.org/html/rfc2048
-http://tools.ietf.org/html/rfc2049
++ http://tools.ietf.org/html/rfc2045
++ http://tools.ietf.org/html/rfc2046
++ http://tools.ietf.org/html/rfc2047
++ http://tools.ietf.org/html/rfc2048
++ http://tools.ietf.org/html/rfc2049
 
 ## Installation
 
@@ -23,15 +23,16 @@ http://tools.ietf.org/html/rfc2049
         mp = multipart.multipart,
         bp = multipart.bodypart;
 
-    var body = mp('form-data'),
-        headers = env.response.headers;
+    var body = mp('mixed');
 
-        body
-            .addBodyPart(
-                bp()
-                    .setType(env.response.headers['Content-Type'])
-                    .setPayload(env.response.body)
-            )
+        console.log(
+            body
+                .addBodyPart(
+                    bp()
+                        .setType('application/json')
+                        .setPayload('{}')
+                ).toString()
+        );
 
 ## Tests
 
