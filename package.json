@@ -1,11 +1,11 @@
 {
-    "name": "multipart",
+    "name": "partly",
     "description": "Simple, extensible, multipart payload encoder and decoder that complies with the official RFC grammar.",
     "author": "Tony Tahmouch <ttahmouch@gmail.com>",
     "licenses": [
         {
             "type": "MIT",
-            "url": "https://github.com/ttahmouch/multipart/blob/master/LICENSE.md"
+            "url": "https://github.com/ttahmouch/partly/blob/master/LICENSE.md"
         }
     ],
     "version": "0.0.1",
@@ -15,15 +15,16 @@
     },
     "repository": {
         "type": "git",
-        "url": "git://github.com/ttahmouch/multipart.git"
+        "url": "git://github.com/ttahmouch/partly.git"
     },
     "keywords": [
         "multipart",
         "bodypart",
         "encoder",
-        "decoder"
+        "decoder",
+        "partly"
     ],
     "bugs": {
-        "url": "https://github.com/ttahmouch/multipart/issues"
+        "url": "https://github.com/ttahmouch/partly/issues"
     }
 }

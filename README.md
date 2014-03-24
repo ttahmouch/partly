@@ -1,5 +1,5 @@
-Multipart
-=========
+Partly
+======
 
 This module is meant to be a simple, extensible, multipart payload encoder and decoder that complies with the official
 grammar specification located here:
@@ -12,16 +12,16 @@ grammar specification located here:
 
 ## Installation
 
-    npm install multipart --save
+    npm install partly --save
 
 ## Usage
 
     /**
      * Module Dependencies.
      */
-    var multipart = require('multipart'),
-        mp = multipart.multipart,
-        bp = multipart.bodypart;
+    var partly = require('partly'),
+        mp = partly.multipart,
+        bp = partly.bodypart;
 
     var body = mp('mixed');
 
