@@ -1,299 +1,417 @@
 /**
  * Falsy Values: false, 0, "", null, undefined, NaN
+ *
+ * Browser:
+ * <script src="partly.js"></script>
+ * <script>
+ *     var multipart = partly.Multipart.create();
+ * </script>
+ *
+ * Node.JS:
+ * var partly = require('partly'),
+ *     multipart = partly.Multipart.create();
+ *
+ * @see http://stackoverflow.com/questions/7327164/common-module-in-node-js-and-browser-javascript
+ *
+ * Polyfills:
+ * Currently, none.
  */
 
-/**
- * Please see examples and grammar at:
- * http://tools.ietf.org/html/rfc2045
- * http://tools.ietf.org/html/rfc2046
- * http://tools.ietf.org/html/rfc2047
- * http://tools.ietf.org/html/rfc2048
- * http://tools.ietf.org/html/rfc2049
- */
-
-Function.prototype.method = function (name, func) {
-    this.prototype[name] = func;
-    return this;
-};
-
-var bChars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'()+_,-./:=? ",
-    crlf = '\r\n',
-    hyphens = '--',
-    crlfRegex = /(\r\n)/g;
-
-/**
- * Generates a count between 0 and 69. Math.random generates a random float [0, 1).
- * So the number can never be exactly 70.
- * @return {Number}
- */
-function boundaryCount() {
-    return Math.floor(Math.random() * 70);
-}
-
-/**
- * Generates a random MIME boundary-acceptable, US-ASCII character.
- * @return {String}
- */
-function boundaryCharacter() {
-    return bChars.charAt(Math.floor(Math.random() * bChars.length));
-}
-
-/**
- * Generates a full boundary based on the count generated and every random character generated.
- * @return {String}
- */
-function boundary() {
-    var count = boundaryCount(),
-        tempString = '',
-        notSpace = boundaryCharacter();
-
-    for (var i = 0; i < count; i++) {
-        tempString += boundaryCharacter();
-    }
-
-    while (notSpace === ' ') {
-        notSpace = boundaryCharacter();
-    }
-
-    return tempString + notSpace;
-}
-
-/**
- * Prefixes a set of hyphens to be MIME compliant.
- * @param boundary is a generated boundary using boundary()
- * @return {String}
- */
-function dashBoundary(boundary) {
-    return hyphens + boundary.toString();
-}
-
-/**
- * Generates a mutlipart entity delimiter.
- * @param boundary is a generated boundary using boundary()
- * @return {String}
- */
-function delimiter(boundary) {
-    return crlf + dashBoundary(boundary);
-}
-
-/**
- * Generates an absolute, closing delimiter for the entire set of entities in a multipart body.
- * @param boundary is a generated boundary using boundary()
- * @return {String}
- */
-function closeDelimiter(boundary) {
-    return delimiter(boundary) + hyphens;
-}
-
-/**
- * Converts any crlf into a space.
- * @param text is the string anticipated to be used as a preamble or epilogue in a mutlipart body.
- * @return {String}
- */
-function discardText(text) {
-    return text.replace(crlfRegex, ' ');
-}
-
-/**
- * A constructor function that defines the semantics of a multipart body.
- * @param subtype should be a String indicating the subtype this instance of a Multipart media type will be.
- * @param preamble should be a String that will be concatenated before the body parts. It should ideally not contain
- * any CRLF sequences. They will be stripped anyways.
- * @param epilogue should be a String that will be concatenated after the body parts. It should ideally not contain
- * any CRLF sequences. They will be stripped anyways.
- * @return {*}
- * @constructor
- */
-function Multipart(subtype, preamble, epilogue) {
-    this._parts = [];
-    this._boundary = boundary();
-    this._subtype = ((typeof subtype === 'string') ? subtype : 'mixed');
-    this._preamble = ((typeof preamble === 'string') ? discardText(preamble) + crlf : '');
-    this._epilogue = ((typeof epilogue === 'string') ? crlf + discardText(epilogue) : '');
-    return this;
-}
-
-/**
- * Accessor methods
- * addBodyPart allows you to add instances of BodyPart to the _parts field of a Multipart instance.
- * setSubtype allows you to provide the same String you could with the constructor.
- * setBoundary allows you to provide the same String you could with the constructor.
- * setPreamble allows you to provide the same String you could with the constructor.
- * setEpilogue allows you to provide the same String you could with the constructor.
- */
-Multipart.method('addBodyPart', function (part) {
-    if (part instanceof BodyPart && this._parts.lastIndexOf(part) === -1) {
-        this._parts.push(part);
-    }
-    return this;
-});
-
-Multipart.method('setSubtype', function (subtype) {
-    this._subtype = ((typeof subtype === 'string') ? subtype : this._subtype);
-    return this;
-});
-
-Multipart.method('getBoundary', function () {
-    return this._boundary;
-});
-
-Multipart.method('setBoundary', function (delimiter) {
-    this._boundary = (typeof delimiter === 'string') ? delimiter : this._boundary;
-    return this;
-});
-
-Multipart.method('setPreamble', function (preamble) {
-    this._preamble = ((typeof preamble === 'string') ? discardText(preamble) + crlf : this._preamble);
-    return this;
-});
-
-Multipart.method('setEpilogue', function (epilogue) {
-    this._epilogue = ((typeof epilogue === 'string') ? crlf + discardText(epilogue) : this._epilogue);
-    return this;
-});
-
-/**
- * Utility method to serialize the Multipart body to String.
- * @return String representing the multipart body and its contained body parts
- */
-Multipart.method('toString', function () {
-    var parts = this._parts,
-        multipartBody = '',
-        encapsulation = (delimiter(this._boundary) + crlf),
-        hasMoreThanOnePart = (parts.length > 1);
+(function (exports) {
+    /**
+     * Lexical Tokens:
+     * CHAR  = <any ASCII character>                                           ; ( 0-127, %x00-7F )
+     * ALPHA = <any ASCII alphabetic character>                                ; ( 65-90 / 97-122, %x41-5A / %x61-7A )
+     * DIGIT = <any ASCII decimal digit>                                       ; ( 48-57, %x30-39 )
+     * CTL   = <any ASCII control character and DEL>                           ; ( 0-31 / 127, %x00-1F / %x7F )
+     * CR    = <ASCII CR, carriage return>                                     ; ( 13, %x0D )
+     * LF    = <ASCII LF, linefeed>                                            ; ( 10, %x0A )
+     * SPACE = <ASCII SP, space>                                               ; ( 32, %x20 )
+     * HTAB  = <ASCII HT, horizontal-tab>                                      ; ( 09, %x09 )
+     * CRLF  = CR LF                                                           ; ( 13 10, %x0D %x0A )
+     * WSP   = SPACE / HTAB                                                    ; ( 32 / 09, %x20 %x09 )
+     * OCTET = <any 0-255 octet value>                                         ; ( 0-255, %x00-FF )
+     * text  = <any CHAR, including bare CR & bare LF, but NOT including CRLF>
+     */
 
     /**
-     * Serialize the body parts in the parts array. Make sure there is an encapsulation boundary around the individual
-     * body parts.
+     * Multipart -- data consisting of multiple entities of independent data types. Four subtypes are initially
+     * defined, including the basic "mixed" subtype specifying a generic mixed set of parts, "alternative" for
+     * representing the same data in multiple formats, "parallel" for parts intended to be viewed simultaneously,
+     * and "digest" for multipart entities in which each part has a default type of "message/rfc822".
+     *
+     * @param parts {Array} of body parts. It is optional. Body parts may be added later using {Multipart}.part({}).
+     * @example
+     * [
+     *  {
+     *     'Body': '... Some text appears here ...'
+     *  },
+     *  {
+     *     'Content-Type': 'multipart/parallel',
+     *     'Body': [
+     *              {
+     *                 'Content-Type': 'audio/basic',
+     *                 'Content-Transfer-Encoding': 'base64',
+     *                 'Body': '... base64-encoded audio data goes here ...'
+     *              },
+     *              {
+     *                 'Content-Type': 'image/jpeg',
+     *                 'Content-Transfer-Encoding': 'base64',
+     *                 'Body': '... base64-encoded image data goes here ...'
+     *              }
+     *             ]
+     *  }
+     * ]
+     *
+     * - Any Multipart Body should be represented by an {Array} of {Object}s.
+     * - Any Body Part should be represented as an {Object} with arbitrary fields representing "Content-" headers.
+     * - Any Body Part should have a "Body" field representing an encoded body {string},
+     *   or a nested Multipart Body {Array}. The nesting can be infinite.
+     * - Any Body Part that is also a Multipart Body, as depicted above, need NOT provide a boundary. It will be
+     *   provided when encoding. Although, a Content-Type field MUST be provided.
+     *
+     *   In other words, just supply this:
+     *   Content-Type: multipart/mixed
+     *
+     *   NOT this:
+     *   Content-Type: multipart/mixed; boundary="gc0pJq0M:08jU534c0p"
+     *
+     * @return {Multipart}
+     * @constructor
      */
-    for (var part in parts) {
-        multipartBody += parts[part].toString();
-        multipartBody += (hasMoreThanOnePart && part < parts.length - 1) ? encapsulation : '';
+    function Multipart(parts) {
+        this.boundary = Multipart.boundary();
+        this.parts = Array.isArray(parts) ? parts : [];
+        return this;
     }
 
     /**
-     * Concatenate the preamble if it exists, first boundary delimiter, serialized body parts, closing delimiter, and
-     * an epilogue if it exists.
+     * Create a new instance of Multipart.
+     *
+     * @param parts {Array} of body parts. It is optional. Body parts may be added later using Multipart.part({}).
+     * @see Multipart
+     *
+     * @return {Multipart}
      */
-    return this._preamble +
-        (dashBoundary(this._boundary) + crlf) +
-        multipartBody +
-        closeDelimiter(this._boundary) +
-        this._epilogue;
-});
-
-/**
- * Convenience method for instantiating a Multipart without having to use the new operator.
- * @param subtype
- * @param preamble
- * @param epilogue
- * @return {Multipart}
- */
-function multipart(subtype, preamble, epilogue) {
-    return new Multipart(subtype, preamble, epilogue);
-}
-
-function BodyPart() {
-    this['Content-Type'] = null;
-    this['Content-Transfer-Encoding'] = null;
-    this['Content-ID'] = null;
-    this['Content-Description'] = null;
-    this['Content-Location'] = null;
-    this['Content-Disposition'] = null;
-    this._payload = null;
-    return Multipart.call(this);
-}
-
-/**
- * Extend Multipart since a BodyPart can also be multipart.
- * @type {Multipart}
- */
-BodyPart.prototype = new Multipart();
-BodyPart.prototype.constructor = BodyPart;
-
-/**
- * Accessor methods.
- * setType allows you to set the Content-Type header field.
- * setTransferEncoding allows you to set the Content-Transfer-Encoding header field.
- * setId allows you to set the Content-ID header field.
- * setDescription allows you to set the Content-Description header field.
- * setLocation allows you to set the Content-Location header field.
- * setDisposition allows you to set the Content-Disposition header field.
- * setPayload allows you to set the *OCTET. This can be a string of an serialized media type including Multipart.
- */
-BodyPart.method('setType', function (type) {
-    this['Content-Type'] = (typeof type === 'string') ? type : this['Content-Type'];
-    return this;
-});
-
-BodyPart.method('setTransferEncoding', function (encoding) {
-    this['Content-Transfer-Encoding'] = (typeof encoding === 'string') ? encoding : this['Content-Transfer-Encoding'];
-    return this;
-});
-
-BodyPart.method('setId', function (id) {
-    this['Content-ID'] = (typeof id === 'string') ? id : this['Content-ID'];
-    return this;
-});
-
-BodyPart.method('setDescription', function (description) {
-    this['Content-Description'] = (typeof description === 'string') ? description : this['Content-Description'];
-    return this;
-});
-
-BodyPart.method('setLocation', function (location) {
-    this['Content-Location'] = (typeof location === 'string') ? location : this['Content-Location'];
-    return this;
-});
-
-BodyPart.method('setDisposition', function (disposition) {
-    this['Content-Disposition'] = (typeof disposition === 'string') ? disposition : this['Content-Disposition'];
-    return this;
-});
-
-BodyPart.method('setPayload', function (payload) {
-    this._payload = (typeof payload === 'string' || payload instanceof Multipart) ? payload : this._payload;
-    return this;
-});
-
-/**
- * Utility method to serialize the BodyPart entity to String.
- * @return String representing the BodyPart entity and any potential nested Multipart instances.
- */
-BodyPart.method('toString', function () {
-    var entityHeaders = '',
-        payload = this._payload,
-        payloadExists = !!(payload),
-        payloadIsMultipart = (payload instanceof Multipart);
+    Multipart.create = function (parts) {
+        return new Multipart(parts);
+    };
 
     /**
-     * If the payload of this body part is an instance of Multipart, then set the Content-Type explicitly with
-     * the subtype specified in the Multipart instance and the boundary generated in this BodyPart instance.
-     * @type {String}
+     * The only mandatory global parameter for the "multipart" media type is the boundary parameter, which consists of
+     * 1 to 70 characters from a set of characters known to be very robust through mail gateways, and NOT ending with
+     * white space. (If a boundary delimiter line appears to end with white space, the white space must be presumed to
+     * have been added by a gateway, and must be deleted.)
+     *
+     * Because boundary delimiters must not appear in the body parts being encapsulated, a user agent must exercise
+     * care to choose a unique boundary parameter value. A boundary parameter value could be the result of an
+     * algorithm designed to produce boundary delimiters with a very low probability of already existing in the data
+     * to be encapsulated without having to prescan the data.
+     *
+     * Every resulting boundary delimiter from this algorithm will be exactly 70 characters and will NOT end in a space.
+     *
+     * @return {string} representing the boundary delimiter.
      */
-    this['Content-Type'] = ((payloadIsMultipart) ?
-        ('multipart/' + payload._subtype + '; boundary="' + this._boundary + '"') : this['Content-Type']);
-
-    /**
-     * Serialize the Content- headers. Any other headers are ignored.
-     */
-    for (var header in this) {
-        if (header.lastIndexOf('Content-') !== -1 && this[header]) {
-            entityHeaders += header + ': ' + this[header] + crlf;
+    Multipart.boundary = function () {
+        /**
+         * RFC 2046 "Multipart" Boundary BNF:
+         * bcharsnospace = DIGIT / ALPHA / "'" / "(" / ")" / "+" / "_" / "," / "-" / "." / "/" / ":" / "=" / "?"
+         * bchars        = bcharsnospace / " "
+         * boundary      = 0*69<bchars> bcharsnospace
+         */
+        for (var bChars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'()+_,-./:=? ",
+                 boundary = '',
+                 i = 0; i < 69; i += 1) {
+            boundary += bChars.charAt(Math.floor(Math.random() * bChars.length));
         }
+        return boundary + bChars.charAt(Math.floor(Math.random() * (bChars.length - 1)));
+    };
+
+    /**
+     * A body part consists of a header area, a blank line, and a body area.
+     *
+     * NO header fields are actually required in body parts. A body part that starts with a blank line, therefore, is
+     * allowed and is a body part for which all default values are to be assumed. In such a case, the absence of a
+     * Content-Type header usually indicates that the corresponding body has a
+     * Content-Type of "text/plain; charset=US-ASCII".
+     *
+     * The only header fields that have defined meaning for body parts are those the names of which begin with
+     * "Content-".  All other header fields may be ignored in body parts.
+     *
+     * @param part {Object}
+     * @see Multipart
+     * @example
+     * {
+     *     'Content-Type': 'multipart/parallel',
+     *     'Body': [
+     *              {
+     *                 'Content-Type': 'audio/basic',
+     *                 'Content-Transfer-Encoding': 'base64',
+     *                 'Body': '... base64-encoded audio data goes here ...'
+     *              },
+     *              {
+     *                 'Content-Type': 'image/jpeg',
+     *                 'Content-Transfer-Encoding': 'base64',
+     *                 'Body': '... base64-encoded image data goes here ...'
+     *              }
+     *             ]
+     * }
+     *
+     * @return {string} representing the body part.
+     */
+    Multipart.part = function (part) {
+        /**
+         * RFC 822 Header Fields BNF / RFC 2046 "Multipart" Body BNF:
+         * field-name = 1*<any CHAR, excluding CTLs, SPACE, and ":">
+         * field-body = *text [CRLF WSP field-body]
+         * field      = field-name ":" [field-body] CRLF
+         * body-part  = *field [CRLF *OCTET]
+         */
+        var body = '';
+        if (!!part && typeof part === 'object') {
+            var content = part['Body'],
+                multipart = Array.isArray(content),
+                boundary = multipart ? Multipart.boundary() : '',
+                parameter = multipart ? '; boundary="' + boundary + '"' : '';
+
+            for (var field in part) {
+                if (part.hasOwnProperty(field) && field !== 'Body') {
+                    body += field + ':' + part[field] + (field === 'Content-Type' ? parameter : '') + '\r\n';
+                }
+            }
+
+            if (!!content) {
+                body += '\r\n' + (multipart ? Multipart.body(content, boundary) : content);
+            }
+        }
+        return body;
+    };
+
+    /**
+     * A body must contain one or more body parts, each preceded by a boundary delimiter line, and the last one
+     * followed by a closing boundary delimiter line.
+     *
+     * @param parts {Array} of body parts.
+     * @see Multipart
+     *
+     * @param boundary {string} representing a boundary delimiter.
+     * @see Multipart.boundary
+     *
+     * @return {string} representing the multipart body.
+     */
+    Multipart.body = function (parts, boundary) {
+        /**
+         * RFC 2046 "Multipart" Body BNF:
+         * multipart-body = [*(*text CRLF) *text CRLF]                ; Optional Preamble
+         *                  "--" boundary *WSP CRLF                   ; --F6Rxhi'v4e)(fn
+         *                  body-part                                 ; Content-Type: application/json
+         *                                                            ;
+         *                                                            ; {"cool":"stuff"}
+         *                  *(CRLF "--" boundary *WSP CRLF body-part) ; --F6Rxhi'v4e)(fn
+         *                                                            ; Content-Type: application/json
+         *                                                            ;
+         *                                                            ; {"cool":"other stuff"}
+         *                  CRLF "--" boundary "--" *WSP              ; --F6Rxhi'v4e)(fn--
+         *                  [CRLF *(*text CRLF) *text]                ; Optional Epilogue
+         */
+        var body = '';
+        if (Array.isArray(parts)) {
+            for (var part in parts) {
+                if (parts.hasOwnProperty(part)) {
+                    body += Multipart.part(parts[part]);
+                    if (parts.length > 1 && part < parts.length - 1) {
+                        body += '\r\n' + '--' + boundary + '\r\n';
+                    }
+                }
+            }
+        }
+        return '--' + boundary + '\r\n' + body + '\r\n' + '--' + boundary + '--';
+    };
+
+    /**
+     * Decodes a {string} representing a multipart body to an {Array} of body parts.
+     *
+     * @param body {string} representing a multipart body.
+     * @see Multipart.body
+     *
+     * @param boundary {string} representing a boundary delimiter.
+     * @see Multipart.boundary
+     *
+     * @return {Array} of body parts.
+     */
+    Multipart.decode = function (body, boundary) {
+        var parts = [],
+            bChars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'()+_,-./:=? ",
+            bodyPartFollows = false;
+        if (typeof body === 'string' && typeof boundary === 'string') {
+            tokenize:
+                for (var i = 0, c = ''; c = body.charAt(i); i += 1) {
+                    if (c === '-' && body.charAt(i + 1) === '-') {
+                        boundaryArea:
+                            for (var j = 0; body.charAt(i + 2 + j) === boundary.charAt(j); j += 1) {
+                                if (j === boundary.length - 1) {
+                                    /**
+                                     * 1. Skip Boundary.
+                                     * 2. Is Closing Boundary? Done Tokenizing.
+                                     * 3. Ignore Whitespace Characters.
+                                     * 4. Ignore CRLF.
+                                     */
+                                    i += 1 + boundary.length;
+                                    if (body.charAt(i + 1) === '-' && body.charAt(i + 2) === '-') {
+                                        break tokenize;
+                                    }
+                                    while (body.charAt(i + 1) === ' ' || body.charAt(i + 1) === '\t') {
+                                        i += 1;
+                                    }
+                                    if (body.charAt(i + 1) === '\r' && body.charAt(i + 2) === '\n') {
+                                        i += 2;
+                                    }
+                                    bodyPartFollows = true;
+                                    break boundaryArea;
+                                }
+                            }
+                    } else if (bodyPartFollows) {
+                        var fieldName = '',
+                            fieldBody = '',
+                            partBody = '',
+                            partBoundary = '',
+                            part = {};
+                        fieldNameArea:
+                            while ((c > ' ' && c < ':') || (c > ':' && c <= '~')) {
+                                fieldName += c;
+                                c = body.charAt(i += 1);
+                                if (c === ':') {
+                                    c = body.charAt(i += 1);
+                                    fieldBodyArea:
+                                        while (c.charCodeAt(0) < 128) {
+                                            /**
+                                             * Is Header Parameter?
+                                             */
+                                            if (c === ';') {
+                                                var start = i,
+                                                    isBchar = false;
+                                                /**
+                                                 * 1. Ignore Whitespace Characters and ";".
+                                                 * 2. Is Boundary Parameter? Ignore '"' and Cut Boundary Parameter.
+                                                 * 3. Otherwise, Jump Back to Start.
+                                                 */
+                                                do {
+                                                    c = body.charAt(i += 1);
+                                                } while (c === ' ' || c === '\t');
+                                                if (body.substr(i, 9) === 'boundary=') {
+                                                    partBoundaryArea:
+                                                        for (c = body.charAt(i += 9);
+                                                             (isBchar = bChars.lastIndexOf(c) !== -1) || c === '"';
+                                                             c = body.charAt(i += 1)) {
+                                                            if (isBchar) {
+                                                                partBoundary += c;
+                                                            }
+                                                        }
+                                                }
+                                                if (!partBoundary) {
+                                                    c = body.charAt(i = start);
+                                                }
+                                            }
+                                            /**
+                                             * 1. Is Header Field Body Ending or Unfolding?
+                                             * 2. Both Cases, Ignore CRLF.
+                                             * 3. Case: Ending, Retain Header Field in Body Part {Object}.
+                                             * 4. Case: Unfolding, Retain Whitespace Character in Field Body.
+                                             */
+                                            if (c === '\r' && body.charAt(i + 1) === '\n') {
+                                                c = body.charAt(i += 2);
+                                                /**
+                                                 * Header Field Body is Ending.
+                                                 */
+                                                if (c !== ' ' && c !== '\t') {
+                                                    part[fieldName] = fieldBody;
+                                                    fieldName = fieldBody = '';
+                                                    break fieldBodyArea;
+                                                }
+                                            }
+                                            fieldBody += c;
+                                            c = body.charAt(i += 1);
+                                        }
+                                }
+                            }
+                        if (c === '\r' && body.charAt(i + 1) === '\n') {
+                            partBodyArea:
+                                for (i += 2; c = body.charAt(i); partBody += c, i += 1) {
+                                    if (c === '\r' && body.charAt(i + 1) === '\n') {
+                                        if (body.charAt(i + 2) === '-' && body.charAt(i + 3) === '-') {
+                                            for (var j = 0; body.charAt(i + 4 + j) === boundary.charAt(j); j += 1) {
+                                                if (j === boundary.length - 1) {
+                                                    break partBodyArea;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            part['Body'] = !!partBoundary ? Multipart.decode(partBody, partBoundary) : partBody;
+                        }
+                        parts.push(part);
+                        bodyPartFollows = false;
+                    }
+                }
+        }
+        return parts;
+    };
+
+    /**
+     * Decodes a {string} representing a multipart body to an instance of Multipart.
+     *
+     * @param body {string} representing a multipart body.
+     * @see Multipart.body
+     *
+     * @param boundary {string} representing a boundary delimiter.
+     * @see Multipart.boundary
+     *
+     * @return {Multipart}
+     */
+    Multipart.from = function (body, boundary) {
+        return Multipart.create(Multipart.decode(body, boundary));
     }
 
     /**
-     * Concatenate the *OCTET payload to the serialized Content- headers. The *OCTET may be an instance of Multipart, or
-     * a payload of a different media type altogether.
+     * Encodes the current instance of Multipart to {string}.
+     *
+     * @return {string} representing the multipart body.
      */
-    return entityHeaders + ((payloadExists) ? crlf +
-        ((payloadIsMultipart) ? payload.setBoundary(this._boundary).toString() : payload) : '');
-});
+    Multipart.prototype.encode = function () {
+        return Multipart.body(this.parts, this.boundary);
+    };
 
-function bodypart() {
-    return new BodyPart();
-}
+    /**
+     * Adds a body part {Object} to the current instance of {Multipart}. This is an alternative to passing them to
+     * the @constructor in an enclosing {Array}.
+     *
+     * @param part {Object}
+     * @see Multipart
+     * @example
+     * {
+     *     'Content-Type': 'multipart/parallel',
+     *     'Body': [
+     *              {
+     *                 'Content-Type': 'audio/basic',
+     *                 'Content-Transfer-Encoding': 'base64',
+     *                 'Body': '... base64-encoded audio data goes here ...'
+     *              },
+     *              {
+     *                 'Content-Type': 'image/jpeg',
+     *                 'Content-Transfer-Encoding': 'base64',
+     *                 'Body': '... base64-encoded image data goes here ...'
+     *              }
+     *             ]
+     * }
+     *
+     * @return {Multipart} for chaining.
+     */
+    Multipart.prototype.part = function (part) {
+        if (!!part && typeof part === 'object') {
+            this.parts.push(part);
+        }
+        return this;
+    };
 
-module.exports.bodypart = exports.bodypart = module.exports.bp = exports.bp = bodypart;
-module.exports.multipart = exports.multipart = module.exports.mp = exports.mp = multipart;
+    exports.Multipart = Multipart;
+})(typeof exports === 'undefined' ? this['partly'] = {} : exports);
